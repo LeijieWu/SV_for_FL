@@ -22,6 +22,8 @@ class Configs(object):
         self.unequal = 1
         self.gpu = 1   # 0 = CPU; 1 = GPU
 
+        self.select = True
+
 
         # TODO for Fderated Env
 
@@ -42,7 +44,7 @@ class Configs(object):
             theta_num = 21840
             self.D = (self.data_size / 10) * (32 * (theta_num + 10 * 28 * 28)) / 1e9
 
-        self.data_size_original = self.data_size
+        self.data_size_original = copy.copy(self.data_size)
 
 
 

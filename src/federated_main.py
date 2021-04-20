@@ -77,6 +77,8 @@ class Env(object):
 
         # load dataset and user groups
         self.train_dataset, self.test_dataset, self.user_groups = get_dataset(self.args)
+
+
         if self.configs.remove_client_index != None:
             self.user_groups.pop(self.configs.remove_client_index)
 
@@ -164,6 +166,7 @@ class Env(object):
 
         # load dataset and user groups
         self.train_dataset, self.test_dataset, self.user_groups = get_dataset(self.args)
+
         if self.configs.remove_client_index != None:
             self.user_groups.pop(self.configs.remove_client_index)
 
@@ -341,8 +344,18 @@ class Env(object):
             local_ep = self.local_ep_list[list(idxs_users).index(idx)]
 
             if local_ep != 0:
-                local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
-                                          idxs=self.user_groups[idx], logger=self.logger)
+                if self.configs.select == False:  # whether select part of data for training
+                    local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
+                                              idxs=self.user_groups[idx], logger=self.logger)
+                else:
+                    if idx == 0:   # select 50% data of client 0
+                        selected_user_data = np.random.choice(self.user_groups[idx], int(0.5*len(self.user_groups[idx])), replace=None)
+                        local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
+                                                  idxs=selected_user_data, logger=self.logger)
+                    else:
+                        local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
+                                                  idxs=self.user_groups[idx], logger=self.logger)
+
                 w, loss = local_model.update_weights(
                     model=copy.deepcopy(self.global_model), global_round=self.index, local_ep=local_ep)
                 self.local_weights.append(copy.deepcopy(w))
