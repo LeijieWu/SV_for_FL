@@ -173,7 +173,7 @@ if __name__ == '__main__':
                                                             (0.3081,))
                                    ]))
     num = 5
-    d = data_partition_trial(dataset_train, num)
+    d = data_partition(dataset_train, num, 0.5)
 
     for one in d:
         print(len(d[one]))
