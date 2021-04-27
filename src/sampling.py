@@ -201,7 +201,7 @@ def mnist_noniid_unequal_handcontrol(dataset, num_users):
     datasize = configs.data_size_original
     shard_size = datasize / num_imgs
     shard_size = shard_size.astype(int)
-    print("AAAA:",datasize, datasize.dtype, shard_size, shard_size.dtype)
+    # print("AAAA:",datasize, datasize.dtype, shard_size, shard_size.dtype)
 
     for i in range(num_users):
         if i == 0:                               # assign the top (shard_size * num_imgs) idxs to client 0

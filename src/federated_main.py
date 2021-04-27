@@ -18,7 +18,7 @@ from RL_brain import PPO
 from options import args_parser
 from update import LocalUpdate, test_inference
 from models import MLP, CNNMnist, CNNFashion_Mnist, CNNCifar, LeNet
-from utils import get_dataset, average_weights, exp_details
+from utils import get_dataset, average_weights, exp_details, sv_weights
 import pandas as pd
 import random
 import threading
@@ -364,88 +364,95 @@ class Env(object):
 
         # TODO Shapley Value
 
-        if round == self.configs.rounds - 1:   # perform sv calculation in the last round
-            user_sv = []
-            # all combinations of all users without themselves
-            comb_list = []
-            for i in range(self.configs.user_num):
-                comb_list += list(itertools.combinations(np.arange(self.configs.user_num), i))
+        # if round == self.configs.rounds - 1:   # perform sv calculation in the last round
+        user_sv = []
 
-            # find the combinations of each user without itself
-            for i in range(self.configs.user_num):  # i: user index
-                comb_without_user = []
-                comb_with_user = []
-                for j in range(len(comb_list)):  # j: combination index
-                    if i not in comb_list[j]:
-                        comb_without_user.append(list(comb_list[j]))  # the combination of user i without itself
-                        temp = list(comb_list[j])
-                        temp.append(i)
-                        comb_with_user.append(sorted(temp))  # the combination of user i with itself
-                print("comb_without_user:", comb_without_user)
-                print("comb_with_user:", comb_with_user)
-                print("######################################")
+        # all combinations of all users without themselves
+        comb_list = []
+        for i in range(self.configs.user_num):
+            comb_list += list(itertools.combinations(np.arange(self.configs.user_num), i))
 
-
-                # calculate the avg model of each combination with/without user
-                avg_comb_model_with = []
-                avg_comb_model_without = []
-
-                for comb in comb_without_user:  # calculate the avg model list of combs without user i
-                    if comb != []:
-                        comb_model_list = []
-                        for idx in comb:
-                            comb_model_list.append(self.local_weights[idx])
-                        avg_model_temp = average_weights(comb_model_list)
-                        avg_comb_model_without.append(avg_model_temp)
-                # The avg_comb_model_without here not include the first null [] comb
+        # find the combinations of each user without itself
+        for i in range(self.configs.user_num):  # i: user index
+            comb_without_user = []
+            comb_with_user = []
+            for j in range(len(comb_list)):  # j: combination index
+                if i not in comb_list[j]:
+                    comb_without_user.append(list(comb_list[j]))  # the combination of user i without itself
+                    temp = list(comb_list[j])
+                    temp.append(i)
+                    comb_with_user.append(sorted(temp))  # the combination of user i with itself
+            print("comb_without_user:", comb_without_user)
+            print("comb_with_user:", comb_with_user)
+            print("######################################")
 
 
-                for comb in comb_with_user:  # calculate the avg model list of combs with user i
+            # calculate the avg model of each combination with/without user
+            avg_comb_model_with = []
+            avg_comb_model_without = []
+
+            for comb in comb_without_user:  # calculate the avg model list of combs without user i
+                if comb != []:
                     comb_model_list = []
                     for idx in comb:
                         comb_model_list.append(self.local_weights[idx])
                     avg_model_temp = average_weights(comb_model_list)
-                    avg_comb_model_with.append(avg_model_temp)
+                    avg_comb_model_without.append(avg_model_temp)
+            # The avg_comb_model_without here not include the first null [] comb
 
 
-                # calculate the test acc of each combination with/without user
-                comb_acc_with = []
-                comb_acc_without = [0.1]  # random network for the first null [] comb have 10% acc on MNIST
-
-                for model in avg_comb_model_without:
-                    self.global_model.load_state_dict(model)
-                    test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
-                    comb_acc_without.append(test_acc)
-
-                for model in avg_comb_model_with:
-                    self.global_model.load_state_dict(model)
-                    test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
-                    comb_acc_with.append(test_acc)
+            for comb in comb_with_user:  # calculate the avg model list of combs with user i
+                comb_model_list = []
+                for idx in comb:
+                    comb_model_list.append(self.local_weights[idx])
+                avg_model_temp = average_weights(comb_model_list)
+                avg_comb_model_with.append(avg_model_temp)
 
 
-                # calculate the shapley value of user i
-                # weight in sv calculation, when user_num = 5 todo need to be modified after change
-                weight_list = [1, 4, 6, 4, 1]
-                len_count = [1, 5, 11, 15, 16]
-                count = 0
-                sv = 0
-                delta_acc = np.zeros(len(comb_acc_with))
-                for k in range(len(comb_acc_with)):
-                    delta_acc[k] = comb_acc_with[k] - comb_acc_without[k]
-                    if k < 1:
-                        sv += 1 * delta_acc[k]
-                    elif k >= 1 and k < 5:
-                        sv += 1/4 * delta_acc[k]
-                    elif k >= 5 and k < 11:
-                        sv += 1/6 * delta_acc[k]
-                    elif k >= 11 and k < 15:
-                        sv += 1/4 * delta_acc[k]
-                    elif k >= 15 and k < 15:
-                        sv += 1 * delta_acc[k]
+            # calculate the test acc of each combination with/without user
+            comb_acc_with = []
+            comb_acc_without = [0.1]  # random network for the first null [] comb have 10% acc on MNIST
 
-                user_sv.append(sv)
-                print("####  user sv  ####:", user_sv)
+            for model in avg_comb_model_without:
+                self.global_model.load_state_dict(model)
+                test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
+                comb_acc_without.append(test_acc)
 
+            for model in avg_comb_model_with:
+                self.global_model.load_state_dict(model)
+                test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
+                comb_acc_with.append(test_acc)
+
+
+            # calculate the shapley value of user i
+            # weight in sv calculation, when user_num = 5 todo need to be modified after change
+            weight_list = [1, 4, 6, 4, 1]
+            len_count = [1, 5, 11, 15, 16]
+            count = 0
+            sv = 0
+            delta_acc = np.zeros(len(comb_acc_with))
+            for k in range(len(comb_acc_with)):
+                delta_acc[k] = comb_acc_with[k] - comb_acc_without[k]
+                if k < 1:
+                    sv += 1 * delta_acc[k]
+                elif k >= 1 and k < 5:
+                    sv += 1/4 * delta_acc[k]
+                elif k >= 5 and k < 11:
+                    sv += 1/6 * delta_acc[k]
+                elif k >= 11 and k < 15:
+                    sv += 1/4 * delta_acc[k]
+                elif k >= 15 and k < 15:
+                    sv += 1 * delta_acc[k]
+
+            user_sv.append(sv)
+            print("####  user sv  ####:", user_sv)
+
+        # TODO sv-based aggregation accuracy
+        global_sv_weignts = sv_weights(self.local_weights, user_sv)
+        self.global_model.load_state_dict(global_sv_weignts)
+
+        sv_test_acc, sv_test_loss = test_inference(self.args, self.global_model, self.test_dataset)
+        print('SV-based Test Accuracy: {:.2f}% \n'.format(100 * sv_test_acc))
 
 
         # # TODO multi-thread
@@ -460,69 +467,69 @@ class Env(object):
 
 
 
-        # update global weights
-        global_weights = average_weights(self.local_weights)
-
-        # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # print(global_weights)
-
-        # update global weights
-        self.global_model.load_state_dict(global_weights)
-
-        loss_avg = sum(self.local_losses) / len(self.local_losses)
-        self.train_loss.append(loss_avg)
-
-        # Calculate avg training accuracy over all users at every epoch
-        list_acc, list_loss = [], []
-        # From now on, set the model to evaluation
-        self.global_model.eval()
-
-        for idx in idxs_users:
-            local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
-                                      idxs=self.user_groups[idx], logger=self.logger)
-            acc, loss = local_model.inference(model=self.global_model)
-            list_acc.append(acc)
-            list_loss.append(loss)
-
-        self.train_accuracy.append(sum(list_acc) / len(list_acc))
-
-        # print global training loss after every 'i' rounds
-
-        # delta_acc = np.mean(np.array(self.train_accuracy)) - self.acc_before
-        # self.acc_before = np.mean(np.array(self.train_accuracy))
-
-
-        if (self.index + 1) % self.print_every == 0:
-            print(f' \nAvg Training Stats after {self.index+ 1} global rounds:')
-            # print(f'Training Loss : {np.mean(np.array(self.train_loss))}')
-            # print('Train Accuracy: {:.2f}% \n'.format(100 * np.mean(np.array(self.train_accuracy))))
-            print(f'Training Loss : {self.train_loss[-1]}')
-            print('Train Accuracy: {:.2f}% \n'.format(100 * self.train_accuracy[-1]))
-
-
-        # TODO    test accuracy
-
-        test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
-        self.test_accuracy.append(test_acc)
-        self.test_loss.append(test_loss)
-
-        print('Test Accuracy: {:.2f}% \n'.format(100 * self.test_accuracy[-1]))
-
-        delta_acc = self.test_accuracy[-1] - self.acc_before
-        self.acc_before = self.test_accuracy[-1]
-
-        delta_loss = self.loss_before - self.test_loss[-1]
-        self.loss_before = self.test_loss[-1]
-        print("Loss:", self.test_loss[-1], "Loss increment:", delta_loss)
-        print("Accuracy:", self.test_accuracy[-1], "Accuracy increment:", delta_acc)
-
-        # test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
-        # delta_acc = test_acc - self.test_acc_before # acc increment for reward
-        # self.test_acc_before = test_acc
+        # # update global weights
+        # global_weights = average_weights(self.local_weights)
         #
-        # print(f' \nAvg Training Stats after {self.index + 1} global rounds:')
-        # print(f'Test Loss: {test_loss}')
-        # print('Test Accuracy: {:.2f}% \n'.format(100 * test_acc))
+        # # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # # print(global_weights)
+        #
+        # # update global weights
+        # self.global_model.load_state_dict(global_weights)
+        #
+        # loss_avg = sum(self.local_losses) / len(self.local_losses)
+        # self.train_loss.append(loss_avg)
+        #
+        # # Calculate avg training accuracy over all users at every epoch
+        # list_acc, list_loss = [], []
+        # # From now on, set the model to evaluation
+        # self.global_model.eval()
+        #
+        # for idx in idxs_users:
+        #     local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
+        #                               idxs=self.user_groups[idx], logger=self.logger)
+        #     acc, loss = local_model.inference(model=self.global_model)
+        #     list_acc.append(acc)
+        #     list_loss.append(loss)
+        #
+        # self.train_accuracy.append(sum(list_acc) / len(list_acc))
+        #
+        # # print global training loss after every 'i' rounds
+        #
+        # # delta_acc = np.mean(np.array(self.train_accuracy)) - self.acc_before
+        # # self.acc_before = np.mean(np.array(self.train_accuracy))
+        #
+        #
+        # if (self.index + 1) % self.print_every == 0:
+        #     print(f' \nAvg Training Stats after {self.index+ 1} global rounds:')
+        #     # print(f'Training Loss : {np.mean(np.array(self.train_loss))}')
+        #     # print('Train Accuracy: {:.2f}% \n'.format(100 * np.mean(np.array(self.train_accuracy))))
+        #     print(f'Training Loss : {self.train_loss[-1]}')
+        #     print('Train Accuracy: {:.2f}% \n'.format(100 * self.train_accuracy[-1]))
+        #
+        #
+        # # TODO    test accuracy
+        #
+        # test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
+        # self.test_accuracy.append(test_acc)
+        # self.test_loss.append(test_loss)
+        #
+        # print('Test Accuracy: {:.2f}% \n'.format(100 * self.test_accuracy[-1]))
+        #
+        # delta_acc = self.test_accuracy[-1] - self.acc_before
+        # self.acc_before = self.test_accuracy[-1]
+        #
+        # delta_loss = self.loss_before - self.test_loss[-1]
+        # self.loss_before = self.test_loss[-1]
+        # print("Loss:", self.test_loss[-1], "Loss increment:", delta_loss)
+        # print("Accuracy:", self.test_accuracy[-1], "Accuracy increment:", delta_acc)
+        #
+        # # test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
+        # # delta_acc = test_acc - self.test_acc_before # acc increment for reward
+        # # self.test_acc_before = test_acc
+        # #
+        # # print(f' \nAvg Training Stats after {self.index + 1} global rounds:')
+        # # print(f'Test Loss: {test_loss}')
+        # # print('Test Accuracy: {:.2f}% \n'.format(100 * test_acc))
 
         self.index += 1
 

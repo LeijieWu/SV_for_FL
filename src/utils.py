@@ -103,6 +103,16 @@ def average_weights(w):
         w_avg[key] = torch.div(w_avg[key], len(w))
     return w_avg
 
+def sv_weights(w, sv):
+
+    w_sv = copy.deepcopy(w[0])
+
+    for key in w_sv.keys():
+        w_sv[key] *= sv[0]
+        for i in range(1, len(w)):
+            w_sv[key] += sv[i] * w[i][key]
+        w_sv[key] = torch.div(w_sv[key], sum(sv))
+    return w_sv
 
 def exp_details(args):
     print('\nExperimental details:')

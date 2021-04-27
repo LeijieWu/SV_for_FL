@@ -22,7 +22,7 @@ class Configs(object):
         self.unequal = 1
         self.gpu = 1   # 0 = CPU; 1 = GPU
 
-        self.select = True
+        self.select = False
 
 
         # TODO for Fderated Env
