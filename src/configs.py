@@ -23,6 +23,7 @@ class Configs(object):
         self.gpu = 1   # 0 = CPU; 1 = GPU
 
         self.select = False
+        self.aggregation = 'avg'   # 'sv' or 'avg'
 
 
         # TODO for Fderated Env

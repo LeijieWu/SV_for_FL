@@ -447,12 +447,18 @@ class Env(object):
             user_sv.append(sv)
             print("####  user sv  ####:", user_sv)
 
-        # TODO sv-based aggregation accuracy
-        global_sv_weignts = sv_weights(self.local_weights, user_sv)
-        self.global_model.load_state_dict(global_sv_weignts)
-
-        sv_test_acc, sv_test_loss = test_inference(self.args, self.global_model, self.test_dataset)
-        print('SV-based Test Accuracy: {:.2f}% \n'.format(100 * sv_test_acc))
+        if self.configs.aggregation == 'sv':
+            # TODO sv-based aggregation accuracy
+            global_sv_weignts = sv_weights(self.local_weights, user_sv)
+            self.global_model.load_state_dict(global_sv_weignts)
+            sv_test_acc, sv_test_loss = test_inference(self.args, self.global_model, self.test_dataset)
+            print('SV-based Test Accuracy: {:.2f}% \n'.format(100 * sv_test_acc))
+        elif self.configs.aggregation == 'avg':
+            # TODO Avg aggregation accuracy
+            global_weights = average_weights(self.local_weights)
+            self.global_model.load_state_dict(global_weights)
+            test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
+            print('Test Accuracy: {:.2f}% \n'.format(100 * test_acc))
 
 
         # # TODO multi-thread
