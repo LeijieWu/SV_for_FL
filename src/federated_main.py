@@ -384,7 +384,7 @@ class Env(object):
                     comb_with_user.append(sorted(temp))  # the combination of user i with itself
             print("comb_without_user:", comb_without_user)
             print("comb_with_user:", comb_with_user)
-            print("######################################")
+            # print("######################################")
 
 
             # calculate the avg model of each combination with/without user
@@ -423,6 +423,8 @@ class Env(object):
                 test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
                 comb_acc_with.append(test_acc)
 
+            print("comb_acc_without:", comb_acc_without)
+            print("comb_acc_with:", comb_acc_with)
 
             # calculate the shapley value of user i
             # weight in sv calculation, when user_num = 5 todo need to be modified after change
@@ -458,7 +460,7 @@ class Env(object):
             global_weights = average_weights(self.local_weights)
             self.global_model.load_state_dict(global_weights)
             test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
-            print('Test Accuracy: {:.2f}% \n'.format(100 * test_acc))
+            print('Avg Test Accuracy: {:.2f}% \n'.format(100 * test_acc))
 
 
         # # TODO multi-thread

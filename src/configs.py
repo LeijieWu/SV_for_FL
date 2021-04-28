@@ -41,7 +41,9 @@ class Configs(object):
             theta_num = 69656
             self.D = (self.data_size / 10) * (32 * (theta_num + 10 * (3 * 32 * 32))) / 1e9
         else:
-            self.data_size = np.array([12000, 10000, 8000, 14000, 16000])
+            # self.data_size = np.array([12000, 10000, 8000, 14000, 16000])
+            # self.data_size = np.array([6000, 12000, 12000, 14000, 16000])
+            self.data_size = np.array([24000, 9000, 9000, 9000, 9000])
             theta_num = 21840
             self.D = (self.data_size / 10) * (32 * (theta_num + 10 * 28 * 28)) / 1e9
 
