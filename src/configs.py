@@ -13,6 +13,7 @@ class Configs(object):
 
         ## TODO For FL training
         self.data = 'mnist'
+        self.task_repeat_time = 1
         self.rounds = 5    #todo change update batch
         self.frac = 1
         self.user_num = 5
@@ -43,7 +44,8 @@ class Configs(object):
         else:
             # self.data_size = np.array([12000, 10000, 8000, 14000, 16000])
             # self.data_size = np.array([6000, 12000, 12000, 14000, 16000])
-            self.data_size = np.array([24000, 9000, 9000, 9000, 9000])
+            # self.data_size = np.array([24000, 9000, 9000, 9000, 9000])
+            self.data_size = np.array([12000, 12000, 12000, 12000, 12000])
             theta_num = 21840
             self.D = (self.data_size / 10) * (32 * (theta_num + 10 * 28 * 28)) / 1e9
 
