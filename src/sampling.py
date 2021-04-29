@@ -209,7 +209,7 @@ def mnist_noniid_unequal_handcontrol(dataset, num_users):
                     (dict_users[i], idxs[0:shard_size[i]*num_imgs]),
                     axis=0)
             idx_shard = list(set(idx_shard) - set([i for i in range(shard_size[i])]))
-        else:
+        else:                                    # randomly assign data to other clients
             rand_set = set(np.random.choice(idx_shard, shard_size[i], replace=False))
             idx_shard = list(set(idx_shard) - rand_set)
             for rand in rand_set:

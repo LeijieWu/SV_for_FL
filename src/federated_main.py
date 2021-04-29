@@ -338,6 +338,8 @@ class Env(object):
         self.local_ep_list = action
 
 
+
+
         #TODO single thread
         for idx in idxs_users:
 
@@ -348,10 +350,10 @@ class Env(object):
                     local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
                                               idxs=self.user_groups[idx], logger=self.logger)
                 else:
-                    if idx == 0:   # select 50% data of client 0
-                        selected_user_data = np.random.choice(self.user_groups[idx], int(0.5*len(self.user_groups[idx])), replace=None)
+                    if idx == 0:   # select 50% data of client 0 for training
+                        selected_user_data_idx = np.random.choice(self.user_groups[idx], int(0.5*len(self.user_groups[idx])), replace=None)
                         local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
-                                                  idxs=selected_user_data, logger=self.logger)
+                                                  idxs=selected_user_data_idx, logger=self.logger)
                     else:
                         local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
                                                   idxs=self.user_groups[idx], logger=self.logger)
@@ -417,12 +419,13 @@ class Env(object):
                 self.global_model.load_state_dict(model)
                 test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
                 comb_acc_without.append(test_acc)
+            print("comb_acc_without:", comb_acc_without)
 
             for model in avg_comb_model_with:
                 self.global_model.load_state_dict(model)
                 test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
                 comb_acc_with.append(test_acc)
-
+            print("comb_acc_with:", comb_acc_with)
             print("comb_acc_without:", comb_acc_without)
             print("comb_acc_with:", comb_acc_with)
 
@@ -443,7 +446,7 @@ class Env(object):
                     sv += 1/6 * delta_acc[k]
                 elif k >= 11 and k < 15:
                     sv += 1/4 * delta_acc[k]
-                elif k >= 15 and k < 15:
+                else:
                     sv += 1 * delta_acc[k]
 
             user_sv.append(sv)
