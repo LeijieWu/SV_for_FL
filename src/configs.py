@@ -13,6 +13,7 @@ class Configs(object):
 
         ## TODO For FL training
         self.data = 'mnist'
+        self.task_repeat_time = 1
         self.rounds = 5    #todo change update batch
         self.frac = 1
         self.user_num = 5
