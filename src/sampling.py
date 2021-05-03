@@ -197,6 +197,7 @@ def mnist_noniid_unequal_handcontrol(dataset, num_users):
     idxs_labels = idxs_labels[:, idxs_labels[1, :].argsort()]
     idxs = idxs_labels[0, :]
 
+
     # determine the shard size of each client
     datasize = configs.data_size_original
     shard_size = datasize / num_imgs
@@ -284,6 +285,7 @@ def cifar_noniid_unequal(dataset, num_users):
     idxs_labels = np.vstack((idxs, labels))
     idxs_labels = idxs_labels[:, idxs_labels[1, :].argsort()]
     idxs = idxs_labels[0, :]
+
 
     # min_shard = round(num_shards/num_users*1/5)
     # max_shard = round(num_shards/num_users*2)

@@ -13,17 +13,17 @@ class Configs(object):
 
         ## TODO For FL training
         self.data = 'mnist'
-        self.task_repeat_time = 1
+        self.task_repeat_time = 500
         self.rounds = 5    #todo change update batch
         self.frac = 1
         self.user_num = 5
         self.FL_LR = 0.005
         self.model = 'cnn'
-        self.iid = 0
-        self.unequal = 1
-        self.gpu = 1   # 0 = CPU; 1 = GPU
+        self.iid = 0   # 0 = non-iid; 1 = iid
+        self.unequal = 1   # 0 = equal; 1 = unequal
+        self.gpu = 0   # 0 = CPU; 1 = GPU
 
-        self.select = False
+        self.select = True
         self.aggregation = 'avg'   # 'sv' or 'avg'
 
 

@@ -6,6 +6,7 @@
 import os
 import copy
 import time
+import json
 import pickle
 import numpy as np
 from tqdm import tqdm
@@ -139,11 +140,11 @@ class Env(object):
         # self.bid_min = 0.7 * self.bid
 
         # todo annotate these random seed if run greedy, save them when run DRL
-        np.random.seed(self.seed)
-        torch.random.manual_seed(self.seed)
-        random.seed(self.seed)
-        torch.cuda.manual_seed_all(self.seed)
-        torch.cuda.manual_seed(self.seed)
+        # np.random.seed(self.seed)
+        # torch.random.manual_seed(self.seed)
+        # random.seed(self.seed)
+        # torch.cuda.manual_seed_all(self.seed)
+        # torch.cuda.manual_seed(self.seed)
 
         start_time = time.time()
         self.acc_list = []
@@ -166,6 +167,14 @@ class Env(object):
 
         # load dataset and user groups
         self.train_dataset, self.test_dataset, self.user_groups = get_dataset(self.args)
+
+        # maintain the original data idx of client 0
+        self.user_groups_all = self.user_groups[0]
+        print("self.user_groups_all:", self.user_groups_all)
+
+        if self.configs.select == True:  # whether select partial data for training
+            self.user_groups[0] = np.random.choice(self.user_groups[0], int(0.5*len(self.user_groups[0])), replace=None)   # select 50% data from client 0 for training
+            print("self.user_groups[0]_selected:", self.user_groups[0])
 
         if self.configs.remove_client_index != None:
             self.user_groups.pop(self.configs.remove_client_index)
@@ -336,8 +345,7 @@ class Env(object):
         # print(type(action))
         self.local_ep_list = action
 
-        all_idx_dict_client_0 = {i: np.array([]) for i in range(int(0.8*self.data_size[0]))}
-
+        # all_idx_dict_client_0 = {i: np.array([]) for i in self.user_groups[0]}   # sv dict for all idx of client 0
 
 
         #TODO single thread
@@ -346,35 +354,41 @@ class Env(object):
             local_ep = self.local_ep_list[list(idxs_users).index(idx)]
 
             if local_ep != 0:
-                if self.configs.select == False:  # whether select part of data for training
-                    local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
-                                              idxs=self.user_groups[idx], logger=self.logger)
-                else:
-                    if idx == 0:   # select 50% data of client 0 for training
-                        selected_user_data_idx = np.random.choice(self.user_groups[idx], int(0.5*len(self.user_groups[idx])), replace=None)
-                        local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
-                                                  idxs=selected_user_data_idx, logger=self.logger)
-                    else:
-                        local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
-                                                  idxs=self.user_groups[idx], logger=self.logger)
+                local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
+                                          idxs=self.user_groups[idx], logger=self.logger)
 
                 w, loss = local_model.update_weights(
                     model=copy.deepcopy(self.global_model), global_round=self.index, local_ep=local_ep)
                 self.local_weights.append(copy.deepcopy(w))
                 self.local_losses.append(copy.deepcopy(loss))
 
+
+        # this part is for test, compare the 80% data result to all data. Please delete it in normal training with sv
+        # global_weights = average_weights(self.local_weights)
+        # self.global_model.load_state_dict(global_weights)
+        # test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
+        # print('Avg Aggregation Test Accuracy: {:.2f}% \n'.format(100 * test_acc))
+
         # TODO Shapley Value Part Start
 
+
+
+        user_sv = []
+
         if round == self.configs.rounds - 1:   # perform sv calculation in the last round
-            user_sv = []
+
+            print("----------------------------------")
+            print("Start Shapley Value Part")
+            print("----------------------------------")
 
             # all combinations of all users without themselves
             comb_list = []
             for i in range(self.configs.user_num):
                 comb_list += list(itertools.combinations(np.arange(self.configs.user_num), i))
+            print('comb list:', comb_list)
 
             # find the combinations of each user without itself
-            for i in range(self.configs.user_num):  # i: user index
+            for i in range(1):  # i: user index     #for i in range(self.configs.user_num):
                 comb_without_user = []
                 comb_with_user = []
                 for j in range(len(comb_list)):  # j: combination index
@@ -452,9 +466,8 @@ class Env(object):
                 user_sv.append(sv)
                 print("####  user sv  ####:", user_sv)
 
-
-
             # TODO Shapley Value Part End
+
 
         if self.configs.aggregation == 'sv':
             # TODO sv-based aggregation accuracy
@@ -548,71 +561,76 @@ class Env(object):
 
         self.index += 1
 
+        return self.user_groups_all, self.user_groups[0], user_sv
+
 
         # TODO     Env for Computing Time & State Transition & Reward Design
 
-        time_cmp = (action * self.D * self.C) / self.frequency
-        # print("Computing Time:", time_cmp)
-
-        time_global = np.max(time_cmp)
-        # print("Global Time:", time_global)
-
-        # E = configs.frequency * configs.frequency * configs.C * configs.D * configs.alpha
-        # E = E * action
-        # E = np.sum(E)
-
-        data_value_sum = np.dot(action, self.data_value)
-        # print("Sum Data Value:", data_value_sum)
-
-        E = np.dot(action, self.unit_E)
-        # print("Energy:", E)
-
-        cost = data_value_sum + E
-        # print("cost:", cost)
-
-
-        if self.configs.performance == 'acc':
-            delta_performance = delta_acc
-        else:
-            delta_performance = delta_loss
-        # reward = (self.lamda * delta_acc - payment - time_global) / 10   #TODO reward percentage need to be change
-        reward = (self.lamda * delta_performance - cost)/10 #TODO test for the existance of data importance
-        # print("Scaling Reward:", reward)
-        # print("------------------------------------------------------------------------")
-
-        # todo state transition here
-
-        # print("########################################################################")
-        # print("Action History:", self.action_history)
-        history_cut = self.action_history[-3:]
-        # print("History Cut:", history_cut)
-        history_avg = np.mean(history_cut, axis=0)
-        # print("history_avg:", history_avg)
-
-        # print("Data Value before:", self.data_value)
-        sign_add = action > history_avg
-        # print("Sign Add:", sign_add)
-        sign_reduce = action < history_avg
-        # print("Sign Reduce:", sign_reduce)
-        self.data_value = self.data_value * sign_add * 0.1 - self.data_value * sign_reduce * 0.1 + self.data_value
-        # print("Data Value after:", self.data_value)
-
-        self.bid_ = self.data_value + self.unit_E
-        # print("Bid:", self.bid)
-        # print("Next Bid:", self.bid_)
-
-        # for i in range(self.bid.size):
+        # time_cmp = (action * self.D * self.C) / self.frequency
+        # # print("Computing Time:", time_cmp)
         #
-        #     if action[i] > history_avg[i]:
-        #         self.bid_[i] = 1.1 * self.bid[i]
-        #     elif action[i] < history_avg[i]:
-        #         self.bid_[i] = 0.9 * self.bid[i]
-        #     else:
-        #         self.bid_[i] = self.bid[i]
+        # time_global = np.max(time_cmp)
+        # # print("Global Time:", time_global)
+        #
+        # # E = configs.frequency * configs.frequency * configs.C * configs.D * configs.alpha
+        # # E = E * action
+        # # E = np.sum(E)
+        #
+        # data_value_sum = np.dot(action, self.data_value)
+        # # print("Sum Data Value:", data_value_sum)
+        #
+        # E = np.dot(action, self.unit_E)
+        # # print("Energy:", E)
+        #
+        # cost = data_value_sum + E
+        # # print("cost:", cost)
+        #
+        #
+        # if self.configs.performance == 'acc':
+        #     delta_performance = delta_acc
+        # else:
+        #     delta_performance = delta_loss
+        # # reward = (self.lamda * delta_acc - payment - time_global) / 10   #TODO reward percentage need to be change
+        # reward = (self.lamda * delta_performance - cost)/10 #TODO test for the existance of data importance
+        # # print("Scaling Reward:", reward)
+        # # print("------------------------------------------------------------------------")
+        #
+        # # todo state transition here
+        #
+        # # print("########################################################################")
+        # # print("Action History:", self.action_history)
+        # history_cut = self.action_history[-3:]
+        # # print("History Cut:", history_cut)
+        # history_avg = np.mean(history_cut, axis=0)
+        # # print("history_avg:", history_avg)
+        #
+        # # print("Data Value before:", self.data_value)
+        # sign_add = action > history_avg
+        # # print("Sign Add:", sign_add)
+        # sign_reduce = action < history_avg
+        # # print("Sign Reduce:", sign_reduce)
+        # self.data_value = self.data_value * sign_add * 0.1 - self.data_value * sign_reduce * 0.1 + self.data_value
+        # # print("Data Value after:", self.data_value)
+        #
+        # self.bid_ = self.data_value + self.unit_E
+        # # print("Bid:", self.bid)
+        # # print("Next Bid:", self.bid_)
+        #
+        # # for i in range(self.bid.size):
+        # #
+        # #     if action[i] > history_avg[i]:
+        # #         self.bid_[i] = 1.1 * self.bid[i]
+        # #     elif action[i] < history_avg[i]:
+        # #         self.bid_[i] = 0.9 * self.bid[i]
+        # #     else:
+        # #         self.bid_[i] = self.bid[i]
+        #
+        # self.bid = self.bid_
+        #
+        # # return reward, self.bid, delta_performance, cost, time_global, action, E
 
-        self.bid = self.bid_
 
-        return reward, self.bid, delta_performance, cost, time_global, action, E
+
 
 # TODO  The above is Environment
 
@@ -889,40 +907,44 @@ def DRL_train():
 def Hand_control():
     configs = Configs()
     env = Env(configs)
-    recording = pd.DataFrame([], columns=['state history', 'action history', 'reward history', 'acc increase hisotry', 'time hisotry', 'energy history', 'social welfare', 'accuracy', 'time', 'energy'])
+    random.seed(env.seed)
+    all_idx_sv_dict = {}
+    # recording = pd.DataFrame([], columns=['state history', 'action history', 'reward history', 'acc increase hisotry', 'time hisotry', 'energy history', 'social welfare', 'accuracy', 'time', 'energy'])
 
-    cur_bid = env.reset()
-    cur_state = np.append(cur_bid, env.index)
+    for i in range(configs.task_repeat_time):
+        print("####### This is the {} repeat task ########".format(i))
+        cur_bid = env.reset()
 
-    state_list = []
-    action_list = []
-    reward_list = []
-    performance_increase_list = []
-    time_list = []
-    energy_list = []
-    for t in range(configs.rounds):
-        print("Current State:", cur_state)
-        # local_ep_list = input('please input the local epoch list:')
-        # local_ep_list = local_ep_list.split(',')
-        # local_ep_list = [int(i) for i in local_ep_list]
-        local_ep_list = [1, 1, 1, 1, 1]
-        action = np.array(local_ep_list)/5
-        print(action)
-        reward, next_bid, delta_accuracy, cost, round_time, int_action, energy = env.step(action, t)
+        for t in range(configs.rounds):
+            local_ep_list = [1, 1, 1, 1, 1]
+            action = np.array(local_ep_list)/5
+            print(action)
+            all_idx, selected_idx_list, sv_of_selected_data = env.step(action, t)
+            print("all_idx:", all_idx)
+            print("selected_idx_list:", selected_idx_list)
+            print("sv_of_selected_data:", sv_of_selected_data)
+            if sv_of_selected_data:   # if the return sv is True
+                print("Last round")
+                for selected_idx in selected_idx_list:
+                    # print(selected_idx)
+                    if selected_idx not in list(all_idx_sv_dict.keys()):     # if idx not in key list, add it as new key
+                        all_idx_sv_dict[selected_idx] = []
+                        all_idx_sv_dict[selected_idx] += sv_of_selected_data
+                        # print("all_idx_sv_dict not in:", all_idx_sv_dict[selected_idx])
+                        # print("Lenth all idx:", len(list(all_idx_sv_dict.keys())))
+                    elif selected_idx in list(all_idx_sv_dict.keys()):       # if idx in key list, append new sv
+                        all_idx_sv_dict[selected_idx] += sv_of_selected_data
+                        # print("all_idx_sv_dict in:", all_idx_sv_dict[selected_idx])
+                        # print("lenth sv:", len(all_idx_sv_dict[selected_idx]))
+                        # print("Lenth all idx:", len(list(all_idx_sv_dict.keys())))
+                # print("All_idx_sv_dict_of_1000:", all_idx_sv_dict[1000.])
+        json_save = json.dumps(all_idx_sv_dict)
+        with open('task500.json', 'w') as json_file:
+            json_file.write(json_save)
 
-        cur_bid = next_bid
-        next_state = np.append(next_bid, env.index)
-        cur_state = next_state
 
-        state_list.append(cur_state)
-        action_list.append(int_action)
-        reward_list.append(reward)
-        performance_increase_list.append(delta_accuracy)
-        time_list.append(round_time)
-        energy_list.append(energy)
-
-    recording = recording.append([{'state history': state_list, 'action history': action_list, 'reward history':reward_list, 'acc increase hisotry': performance_increase_list, 'time hisotry': time_list, 'energy history': energy_list, 'social welfare': np.sum(reward_list), 'accuracy': np.sum(performance_increase_list), 'time': np.sum(time_list), 'energy': np.sum(energy_list)}])
-    recording.to_csv('Hand_control_result.csv')
+    # recording = recording.append([{'state history': state_list, 'action history': action_list, 'reward history':reward_list, 'acc increase hisotry': performance_increase_list, 'time hisotry': time_list, 'energy history': energy_list, 'social welfare': np.sum(reward_list), 'accuracy': np.sum(performance_increase_list), 'time': np.sum(time_list), 'energy': np.sum(energy_list)}])
+    # recording.to_csv('Hand_control_result.csv')
 
 def greedy():
     configs = Configs()
