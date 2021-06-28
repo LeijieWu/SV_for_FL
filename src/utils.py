@@ -85,6 +85,7 @@ def get_dataset(args):
             if args.unequal:
                 # Chose uneuqal splits for every user
                 user_groups = mnist_noniid_unequal_handcontrol(train_dataset, args.num_users)
+                # user_groups = mnist_noniid_unequal_handcontrol(train_dataset, args.num_users)
             else:
                 # Chose euqal splits for every user
                 user_groups = mnist_noniid(train_dataset, args.num_users)

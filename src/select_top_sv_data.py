@@ -24,14 +24,18 @@ from configs import Configs
 from DNC_PPO import PPO
 from itertools import product
 
-def sv_top80percent_data():
-    with open("../src/task100.json",'r') as load_f:
+def sv_top80percent_data(file_name):
+    with open(file_name, 'r') as load_f:
         load_sv_dict = json.load(load_f)
+
+    print("The lenth of read idx group {} is {}.".format(file_name, len(load_sv_dict.keys())))
 
     data_idx = []
     data_sv = []
     for idx in list(load_sv_dict.keys()):  # Extract the information in the dict
         data_idx.append(float(idx))
+        # if len(load_sv_dict[idx]) < 220:
+        #     print('Lenth of {} sv list is {}'.format(idx, len(load_sv_dict[idx])))
         load_sv_dict[idx] = sum(load_sv_dict[idx])/len(load_sv_dict[idx])
         data_sv.append(float(load_sv_dict[idx]))
     # print(len(data_idx), len(data_sv))
@@ -44,8 +48,8 @@ def sv_top80percent_data():
     # print(idxs_sorted)
     idxs_reverse_sorted = idxs_sorted[::-1]  # idxs with sv from large to small
     # print(idxs_reverse_sorted)
-    top_80percent_sv_data_idxs = idxs_reverse_sorted[:int(0.8*len(idxs_reverse_sorted))]   # select idxs with top 80% sv
-    # print(top_80percent_sv_data_idxs)
+    top_80percent_sv_data_idxs = idxs_reverse_sorted[:int(0.6 * len(idxs_reverse_sorted))]   # select idxs with top 80% sv
+    # print(top_80percent_sv_data_idxs, len(top_80percent_sv_data_idxs))
     return top_80percent_sv_data_idxs
 
 def get_parameter_number(net):
@@ -64,6 +68,12 @@ class Env(object):
         self.seed = 0
         self.D = configs.D
         self.history_avg_price = np.zeros(self.configs.user_num)
+        # self.lamda = 0.8
+        self.file_name = ["../src/task500_normal_noniid_client0_v1.json",
+                          "../src/task500_normal_noniid_client1_v1.json",
+                          "../src/task500_normal_noniid_client2_v1.json",
+                          "../src/task500_normal_noniid_client3_v1.json",
+                          "../src/task500_normal_noniid_client4_v1.json"]
 
     def reset(self):
         self.index = 0
@@ -72,13 +82,14 @@ class Env(object):
         self.bid = self.data_value + self.unit_E
         self.bid_ = np.zeros(self.configs.user_num)
         self.action_history = []
+        self.user_groups_all = []
 
         # todo annotate these random seed if run greedy, save them when run DRL
-        np.random.seed(self.seed)
-        torch.random.manual_seed(self.seed)
-        random.seed(self.seed)
-        torch.cuda.manual_seed_all(self.seed)
-        torch.cuda.manual_seed(self.seed)
+        # np.random.seed(self.seed)
+        # torch.random.manual_seed(self.seed)
+        # random.seed(self.seed)
+        # torch.cuda.manual_seed_all(self.seed)
+        # torch.cuda.manual_seed(self.seed)
 
         start_time = time.time()
         self.acc_list = []
@@ -101,11 +112,35 @@ class Env(object):
 
         # load dataset and user groups
         self.train_dataset, self.test_dataset, self.user_groups = get_dataset(self.args)
+        print("11111111:", self.user_groups)
 
-        # maintain the original data idx of client 0
-        self.user_groups_all = self.user_groups[0]
+        # read_dictionary = np.load('user_groups_normal_non_iid_1.npy', allow_pickle=True).item()
+        # print("22222222:", read_dictionary)
+        # self.user_groups = copy.deepcopy(read_dictionary)
+        # print("33333333:", self.user_groups)
 
-        self.user_groups[0] = sv_top80percent_data()
+        # TODO select data with top sv.
+        # for i in range(self.configs.user_num):
+        #     self.user_groups[i] = sv_top80percent_data(self.file_name[i])
+        #     print("The selected top idx group of client {} is {}, and its lenth is {}.\n".format(i, self.user_groups[i], len(self.user_groups[i])))
+
+        # TODO  random select data.
+        # for i in range(self.configs.user_num):
+        #     self.user_groups[i] = np.random.choice(read_dictionary[i], int(0.6 * len(read_dictionary[i])), replace=False)
+        #     print(self.user_groups[i], len(self.user_groups[i]), read_dictionary[i], len(read_dictionary[i]))
+
+
+        # count = 0
+        # for i in range(self.configs.user_num):
+        #     for idx in self.user_groups[i]:
+        #         if idx not in read_dictionary[i]:
+        #             count += 1
+        # if count != 0:
+        #     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # else:
+        #     print("#################################")
+
+
 
         if self.configs.remove_client_index != None:
             self.user_groups.pop(self.configs.remove_client_index)
@@ -190,7 +225,8 @@ class Env(object):
             local_ep = self.local_ep_list[list(idxs_users).index(idx)]
 
             if idx == 0:
-                print("##########:", self.user_groups[idx])
+                print("########## The Lenth of {} is {}".format(self.user_groups[idx], len(self.user_groups[idx])))
+
 
             if local_ep != 0:
                 local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
@@ -212,20 +248,20 @@ class Env(object):
 def Hand_control():
     configs = Configs()
     env = Env(configs)
-    random.seed(env.seed)
+    # random.seed(env.seed)
+
     all_idx_sv_dict = {}
     # recording = pd.DataFrame([], columns=['state history', 'action history', 'reward history', 'acc increase hisotry', 'time hisotry', 'energy history', 'social welfare', 'accuracy', 'time', 'energy'])
 
-    for i in range(configs.task_repeat_time):
-        print("####### This is the {} repeat task ########".format(i))
-        env.reset()
+    # for i in range(configs.task_repeat_time):
+    #     print("####### This is the {} repeat task ########".format(i))
+    env.reset()
 
-        for t in range(configs.rounds):
-            local_ep_list = [1, 1, 1, 1, 1]
-            action = np.array(local_ep_list)/5
-            print(action)
-            env.step(action, t)
-
+    for t in range(configs.rounds):
+        local_ep_list = [1, 1, 1, 1, 1]
+        action = np.array(local_ep_list)/5
+        print(action)
+        env.step(action, t)
 
 
     # recording = recording.append([{'state history': state_list, 'action history': action_list, 'reward history':reward_list, 'acc increase hisotry': performance_increase_list, 'time hisotry': time_list, 'energy history': energy_list, 'social welfare': np.sum(reward_list), 'accuracy': np.sum(performance_increase_list), 'time': np.sum(time_list), 'energy': np.sum(energy_list)}])
@@ -233,7 +269,6 @@ def Hand_control():
 
 
 
-
 if __name__ == '__main__':
-    # sv_top80percent_data()
+    # sv_top80percent_data(file_name[0])
     Hand_control()

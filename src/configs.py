@@ -12,9 +12,9 @@ class Configs(object):
     def __init__(self):
 
         ## TODO For FL training
-        self.data = 'mnist'
+        self.data = 'cifar'
         self.task_repeat_time = 500
-        self.rounds = 5    #todo change update batch
+        self.rounds = 10    #todo change update batch
         self.frac = 1
         self.user_num = 5
         self.FL_LR = 0.005
@@ -24,6 +24,8 @@ class Configs(object):
         self.gpu = 0   # 0 = CPU; 1 = GPU
 
         self.select = True
+        self.selected_client = 0
+
         self.aggregation = 'avg'   # 'sv' or 'avg'
 
 
@@ -32,13 +34,15 @@ class Configs(object):
         self.remove_client_index = None
 
 
-
         if self.data == 'cifar':
-            self.data_size = np.array([40, 38, 32, 46, 44]) * 250
+            # self.data_size = np.array([40, 38, 32, 46, 44]) * 250
+            self.data_size = np.array([10000, 10000, 10000, 10000, 10000])
+            self.batch_size = 10
             theta_num = 62006
             self.D = (self.data_size / 10) * (32 * (theta_num + 10 * (3 * 32 * 32))) / 1e9
         elif self.data == 'cifar100':
             self.data_size = np.array([40, 38, 32, 46, 44]) * 250
+            self.batch_size = 10
             theta_num = 69656
             self.D = (self.data_size / 10) * (32 * (theta_num + 10 * (3 * 32 * 32))) / 1e9
         else:
@@ -46,6 +50,7 @@ class Configs(object):
             # self.data_size = np.array([6000, 12000, 12000, 14000, 16000])
             # self.data_size = np.array([24000, 9000, 9000, 9000, 9000])
             self.data_size = np.array([12000, 12000, 12000, 12000, 12000])
+            self.batch_size = 100
             theta_num = 21840
             self.D = (self.data_size / 10) * (32 * (theta_num + 10 * 28 * 28)) / 1e9
 

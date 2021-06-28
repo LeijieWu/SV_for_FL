@@ -47,6 +47,33 @@ class Env(object):
         self.D = configs.D
         self.history_avg_price = np.zeros(self.configs.user_num)
 
+
+
+        # load dataset and user groups
+        self.args = args_parser()
+        self.train_dataset, self.test_dataset, self.user_groups = get_dataset(self.args)
+        np.save('user_groups_cifar.npy', self.user_groups)
+
+        # read_dictionary = np.load('user_groups_normal_non_iid_1.npy', allow_pickle=True).item()
+        # self.user_groups = read_dictionary
+
+
+        # count = 0
+        # for idx in read_dictionary[0]:
+        #     if idx not in self.user_groups[0]:
+        #         count += 1
+        # if count != 0:
+        #     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # else:
+        #     print("#############################################################")
+
+
+        # maintain the original data idx of selected client
+        self.user_groups_all = []
+        self.user_groups_all = self.user_groups[self.configs.selected_client]
+        print("The lenth of selected user_groups_all {} is {}.\n".format(self.user_groups_all, len(self.user_groups_all)))
+
+
     def reset_for_greedy(self):
         self.index = 0
         self.data_value = 0.001 * self.data_size
@@ -132,12 +159,8 @@ class Env(object):
 
     def reset(self):
         self.index = 0
-        self.data_value = 0.001 * self.data_size
-        self.unit_E = self.configs.frequency * self.configs.frequency * self.configs.C * self.configs.D * self.configs.alpha  #TODO
-        self.bid = self.data_value + self.unit_E
-        self.bid_ = np.zeros(self.configs.user_num)
-        self.action_history = []
-        # self.bid_min = 0.7 * self.bid
+
+
 
         # todo annotate these random seed if run greedy, save them when run DRL
         # np.random.seed(self.seed)
@@ -165,16 +188,13 @@ class Env(object):
         else:
             device = 'cpu'
 
-        # load dataset and user groups
-        self.train_dataset, self.test_dataset, self.user_groups = get_dataset(self.args)
-
-        # maintain the original data idx of client 0
-        self.user_groups_all = self.user_groups[0]
-        print("self.user_groups_all:", self.user_groups_all)
-
         if self.configs.select == True:  # whether select partial data for training
-            self.user_groups[0] = np.random.choice(self.user_groups[0], int(0.5*len(self.user_groups[0])), replace=None)   # select 50% data from client 0 for training
-            print("self.user_groups[0]_selected:", self.user_groups[0])
+            print("The lenth of previous selected self.user_groups {} is {}.".format(self.user_groups[self.configs.selected_client], len(self.user_groups[self.configs.selected_client])))
+
+            self.user_groups[self.configs.selected_client] = np.random.choice(self.user_groups_all, int(0.5 * len(self.user_groups_all)),
+                                                   replace=None)  # select 50% data from client for training
+
+            print("The lenth of current self.user_groups_selected {} is {}:".format(self.user_groups[self.configs.selected_client], len(self.user_groups[self.configs.selected_client])))
 
         if self.configs.remove_client_index != None:
             self.user_groups.pop(self.configs.remove_client_index)
@@ -224,7 +244,6 @@ class Env(object):
         self.print_every = 1
         val_loss_pre, counter = 0, 0
 
-        return self.bid
 
 
     # TODO   for multi- thread
@@ -300,9 +319,7 @@ class Env(object):
                     action_cost.append(self.configs.myopia_max_epoch)
                 action_cost = np.array(action_cost)
 
-                data_value_sum = np.dot(action_cost, self.data_value)
-                E = np.dot(action_cost, self.unit_E)
-                cost = data_value_sum + E
+
 
                 if self.configs.performance == 'acc':
                     delta_performance = delta_acc
@@ -338,14 +355,7 @@ class Env(object):
         # tep = 3
         # action = np.array([tep, tep, tep, tep, tep])
 
-        self.action_history = list(self.action_history)
-        self.action_history.append(action)
-        self.action_history = np.array(self.action_history)
-        # print("Action", action)
-        # print(type(action))
         self.local_ep_list = action
-
-        # all_idx_dict_client_0 = {i: np.array([]) for i in self.user_groups[0]}   # sv dict for all idx of client 0
 
 
         #TODO single thread
@@ -363,15 +373,13 @@ class Env(object):
                 self.local_losses.append(copy.deepcopy(loss))
 
 
-        # this part is for test, compare the 80% data result to all data. Please delete it in normal training with sv
+        # Todo this part is for test, compare the 80% data result to all data. Please delete it in normal training with sv
         # global_weights = average_weights(self.local_weights)
         # self.global_model.load_state_dict(global_weights)
         # test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
         # print('Avg Aggregation Test Accuracy: {:.2f}% \n'.format(100 * test_acc))
 
         # TODO Shapley Value Part Start
-
-
 
         user_sv = []
 
@@ -388,85 +396,89 @@ class Env(object):
             print('comb list:', comb_list)
 
             # find the combinations of each user without itself
-            for i in range(1):  # i: user index     #for i in range(self.configs.user_num):
-                comb_without_user = []
-                comb_with_user = []
-                for j in range(len(comb_list)):  # j: combination index
-                    if i not in comb_list[j]:
-                        comb_without_user.append(list(comb_list[j]))  # the combination of user i without itself
-                        temp = list(comb_list[j])
-                        temp.append(i)
-                        comb_with_user.append(sorted(temp))  # the combination of user i with itself
-                print("comb_without_user:", comb_without_user)
-                print("comb_with_user:", comb_with_user)
-                # print("######################################")
+            for i in range(self.configs.user_num):  # i: user index     #for i in range(self.configs.user_num):
+                # print("NoNoNo")
+                if i == self.configs.selected_client:
+                    # print("Yes")
+                    comb_without_user = []
+                    comb_with_user = []
+                    for j in range(len(comb_list)):  # j: combination index
+                        if i not in comb_list[j]:
+                            comb_without_user.append(list(comb_list[j]))  # the combination of user i without itself
+                            temp = list(comb_list[j])
+                            temp.append(i)
+                            comb_with_user.append(sorted(temp))  # the combination of user i with itself
+                    print("comb_without_user:", comb_without_user)
+                    print("comb_with_user:", comb_with_user)
+                    # print("######################################")
 
 
-                # calculate the avg model of each combination with/without user
-                avg_comb_model_with = []
-                avg_comb_model_without = []
+                    # calculate the avg model of each combination with/without user
+                    avg_comb_model_with = []
+                    avg_comb_model_without = []
 
-                for comb in comb_without_user:  # calculate the avg model list of combs without user i
-                    if comb != []:
+                    for comb in comb_without_user:  # calculate the avg model list of combs without user i
+                        if comb != []:
+                            comb_model_list = []
+                            for idx in comb:
+                                comb_model_list.append(self.local_weights[idx])
+                            avg_model_temp = average_weights(comb_model_list)
+                            avg_comb_model_without.append(avg_model_temp)
+                    # The avg_comb_model_without here not include the first null [] comb
+
+
+                    for comb in comb_with_user:  # calculate the avg model list of combs with user i
                         comb_model_list = []
                         for idx in comb:
                             comb_model_list.append(self.local_weights[idx])
                         avg_model_temp = average_weights(comb_model_list)
-                        avg_comb_model_without.append(avg_model_temp)
-                # The avg_comb_model_without here not include the first null [] comb
+                        avg_comb_model_with.append(avg_model_temp)
 
 
-                for comb in comb_with_user:  # calculate the avg model list of combs with user i
-                    comb_model_list = []
-                    for idx in comb:
-                        comb_model_list.append(self.local_weights[idx])
-                    avg_model_temp = average_weights(comb_model_list)
-                    avg_comb_model_with.append(avg_model_temp)
+                    # calculate the test acc of each combination with/without user
+                    comb_acc_with = []
+                    comb_acc_without = [0.1]  # random network for the first null [] comb have 10% acc on MNIST
+
+                    for model in avg_comb_model_without:
+                        self.global_model.load_state_dict(model)
+                        test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
+                        comb_acc_without.append(test_acc)
 
 
-                # calculate the test acc of each combination with/without user
-                comb_acc_with = []
-                comb_acc_without = [0.1]  # random network for the first null [] comb have 10% acc on MNIST
+                    for model in avg_comb_model_with:
+                        self.global_model.load_state_dict(model)
+                        test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
+                        comb_acc_with.append(test_acc)
 
-                for model in avg_comb_model_without:
-                    self.global_model.load_state_dict(model)
-                    test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
-                    comb_acc_without.append(test_acc)
-
-
-                for model in avg_comb_model_with:
-                    self.global_model.load_state_dict(model)
-                    test_acc, test_loss = test_inference(self.args, self.global_model, self.test_dataset)
-                    comb_acc_with.append(test_acc)
-
-                print("comb_acc_without:", comb_acc_without)
-                print("comb_acc_with:", comb_acc_with)
+                    print("comb_acc_without:", comb_acc_without)
+                    print("comb_acc_with:", comb_acc_with)
 
 
-                # calculate the shapley value of user i
-                # weight in sv calculation, when user_num = 5 todo need to be modified after change
-                weight_list = [1, 4, 6, 4, 1]
-                len_count = [1, 5, 11, 15, 16]
-                count = 0
-                sv = 0
-                delta_acc = np.zeros(len(comb_acc_with))
-                for k in range(len(comb_acc_with)):
-                    delta_acc[k] = comb_acc_with[k] - comb_acc_without[k]
-                    if k < 1:
-                        sv += 1 * delta_acc[k]
-                    elif k >= 1 and k < 5:
-                        sv += 1/4 * delta_acc[k]
-                    elif k >= 5 and k < 11:
-                        sv += 1/6 * delta_acc[k]
-                    elif k >= 11 and k < 15:
-                        sv += 1/4 * delta_acc[k]
-                    else:
-                        sv += 1 * delta_acc[k]
+                    # calculate the shapley value of user i
+                    # weight in sv calculation, when user_num = 5 todo need to be modified after change
+                    weight_list = [1, 4, 6, 4, 1]
+                    len_count = [1, 5, 11, 15, 16]
+                    count = 0
+                    sv = 0
+                    delta_acc = np.zeros(len(comb_acc_with))
+                    for k in range(len(comb_acc_with)):
+                        delta_acc[k] = comb_acc_with[k] - comb_acc_without[k]
+                        if k < 1:
+                            sv += 1 * delta_acc[k]
+                        elif k >= 1 and k < 5:
+                            sv += 1/4 * delta_acc[k]
+                        elif k >= 5 and k < 11:
+                            sv += 1/6 * delta_acc[k]
+                        elif k >= 11 and k < 15:
+                            sv += 1/4 * delta_acc[k]
+                        else:
+                            sv += 1 * delta_acc[k]
 
-                user_sv.append(sv)
-                print("####  user sv  ####:", user_sv)
+                    user_sv.append(sv)
+                    print("####  user sv  ####:", user_sv)
 
-            # TODO Shapley Value Part End
+
+        # TODO Shapley Value Part End
 
 
         if self.configs.aggregation == 'sv':
@@ -561,7 +573,7 @@ class Env(object):
 
         self.index += 1
 
-        return self.user_groups_all, self.user_groups[0], user_sv
+        return self.user_groups_all, self.user_groups[self.configs.selected_client], user_sv
 
 
         # TODO     Env for Computing Time & State Transition & Reward Design
@@ -907,7 +919,7 @@ def DRL_train():
 def Hand_control():
     configs = Configs()
     env = Env(configs)
-    random.seed(env.seed)
+    # random.seed(env.seed)
     all_idx_sv_dict = {}
     # recording = pd.DataFrame([], columns=['state history', 'action history', 'reward history', 'acc increase hisotry', 'time hisotry', 'energy history', 'social welfare', 'accuracy', 'time', 'energy'])
 
@@ -918,26 +930,22 @@ def Hand_control():
         for t in range(configs.rounds):
             local_ep_list = [1, 1, 1, 1, 1]
             action = np.array(local_ep_list)/5
-            print(action)
-            all_idx, selected_idx_list, sv_of_selected_data = env.step(action, t)
-            print("all_idx:", all_idx)
-            print("selected_idx_list:", selected_idx_list)
-            print("sv_of_selected_data:", sv_of_selected_data)
-            if sv_of_selected_data:   # if the return sv is True
+            # print(action)
+            all_idx, selected_idx_list, selected_user_sv = env.step(action, t)
+            print("The lenth of all_idx {} is {}:".format(all_idx, len(all_idx)))
+            print("The lenth of selected_idx_list {} is {}:".format(selected_idx_list, len(selected_idx_list)))
+            print("The lenth of all_user_sv {} is {}:".format(selected_user_sv, len(selected_user_sv)))
+            if selected_user_sv:   # if the return sv is True
                 print("Last round")
                 for selected_idx in selected_idx_list:
                     # print(selected_idx)
                     if selected_idx not in list(all_idx_sv_dict.keys()):     # if idx not in key list, add it as new key
                         all_idx_sv_dict[selected_idx] = []
-                        all_idx_sv_dict[selected_idx] += sv_of_selected_data
-                        # print("all_idx_sv_dict not in:", all_idx_sv_dict[selected_idx])
-                        # print("Lenth all idx:", len(list(all_idx_sv_dict.keys())))
+                        all_idx_sv_dict[selected_idx] += selected_user_sv
                     elif selected_idx in list(all_idx_sv_dict.keys()):       # if idx in key list, append new sv
-                        all_idx_sv_dict[selected_idx] += sv_of_selected_data
-                        # print("all_idx_sv_dict in:", all_idx_sv_dict[selected_idx])
-                        # print("lenth sv:", len(all_idx_sv_dict[selected_idx]))
-                        # print("Lenth all idx:", len(list(all_idx_sv_dict.keys())))
-                # print("All_idx_sv_dict_of_1000:", all_idx_sv_dict[1000.])
+                        all_idx_sv_dict[selected_idx] += selected_user_sv
+                print("The lenth of current idx_dict is {}".format(len(list(all_idx_sv_dict.keys()))))
+
         json_save = json.dumps(all_idx_sv_dict)
         with open('task500.json', 'w') as json_file:
             json_file.write(json_save)
@@ -1069,5 +1077,13 @@ if __name__ == '__main__':
     # fed_avg()
     # DRL_inference('Nonecifar_acc2021-01-11')
     # Greedy_myopia()
+
+    seed = 0
+    np.random.seed(seed)
+    torch.random.manual_seed(seed)
+    random.seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_seed(seed)
+
     Hand_control()
     # greedy()
