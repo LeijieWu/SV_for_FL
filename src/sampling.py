@@ -22,6 +22,7 @@ def randomSplit(M, N, minV, maxV):
     print(res)
     return res
 
+# MNIST/Noise MNIST IID generated function
 def mnist_iid(dataset, num_users):
     """
     Sample I.I.D. client data from MNIST dataset
@@ -37,7 +38,7 @@ def mnist_iid(dataset, num_users):
         all_idxs = list(set(all_idxs) - dict_users[i])
     return dict_users
 
-
+# MNIST unique functions:
 def mnist_noniid(dataset, num_users):
     """
     Sample non-I.I.D client data from MNIST dataset
@@ -66,7 +67,6 @@ def mnist_noniid(dataset, num_users):
             dict_users[i] = np.concatenate(
                 (dict_users[i], idxs[rand*num_imgs:(rand+1)*num_imgs]), axis=0)
     return dict_users
-
 
 def mnist_noniid_unequal(dataset, num_users):
     """
@@ -170,7 +170,6 @@ def mnist_noniid_unequal(dataset, num_users):
     # dict_users = data_partition_trial(dataset, num_users)
     return dict_users
 
-
 def mnist_noniid_unequal_handcontrol(dataset, num_users):
     """
     Sample non-I.I.D client data from MNIST dataset s.t clients
@@ -220,7 +219,134 @@ def mnist_noniid_unequal_handcontrol(dataset, num_users):
 
     return dict_users
 
+# Noise-MNIST unique functions:
+def noise_mnist_noniid(dataset, num_users):
+    """
+    Sample noise non-I.I.D client data from MNIST dataset
+    :param dataset:
+    :param num_users:
+    :return:
+    """
+    # 80,000 training imgs -->  200 imgs/shard X 400 shards
+    num_shards, num_imgs = 200, 400
+    idx_shard = [i for i in range(num_shards)]
+    dict_users = {i: np.array([]) for i in range(num_users)}
+    idxs = np.arange(num_shards * num_imgs)
+    labels = dataset.train_labels.numpy()
 
+    # sort labels
+    idxs_labels = np.vstack((idxs, labels))
+
+    idxs_labels = idxs_labels[:, idxs_labels[1, :].argsort()]
+    idxs = idxs_labels[0, :]
+
+    # divide and assign 2 shards/client
+    for i in range(num_users):
+        rand_set = set(np.random.choice(idx_shard, 2, replace=False))
+        idx_shard = list(set(idx_shard) - rand_set)
+        for rand in rand_set:
+            dict_users[i] = np.concatenate(
+                (dict_users[i], idxs[rand * num_imgs:(rand + 1) * num_imgs]), axis=0)
+    return dict_users
+
+def noise_mnist_noniid_unequal(dataset, num_users):
+    """
+    Sample non-I.I.D client data from MNIST dataset s.t clients
+    have unequal amount of data
+    :param dataset:
+    :param num_users:
+    :returns a dict of clients with each clients assigned certain
+    number of training imgs
+    """
+    # 80,000 training imgs --> 50 imgs/shard X 1600 shards
+    num_shards, num_imgs = 1600, 50
+    idx_shard = [i for i in range(num_shards)]
+    dict_users = {i: np.array([]) for i in range(num_users)}
+    idxs = np.arange(num_shards*num_imgs)
+    labels = dataset.train_labels.numpy()
+
+    # sort labels
+    idxs_labels = np.vstack((idxs, labels))
+    idxs_labels = idxs_labels[:, idxs_labels[1, :].argsort()]
+    idxs = idxs_labels[0, :]
+
+    # Minimum and maximum shards assigned per client:
+    min_shard = round(num_shards/num_users*1/5)
+    max_shard = round(num_shards/num_users*2)
+
+    # Divide the shards into random chunks for every client
+    # s.t the sum of these chunks = num_shards
+    configs = Configs()
+    datasize = configs.data_size
+    random_shard_size = datasize/num_imgs
+    random_shard_size = random_shard_size.astype('int32')
+
+    # if num_users == 5:
+    #     random_shard_size = np.array([200, 240, 280, 160, 320])
+    #
+    # else:
+    #     random_shard_size = np.array(randomSplit(num_shards, num_users, min_shard, max_shard))
+
+    Di = pd.DataFrame(random_shard_size * num_imgs)
+    Di.to_csv(str(num_users) + 'mnist.csv', header=['data_size'])
+
+    # Assign the shards randomly to each client
+    if sum(random_shard_size) > num_shards:
+
+        for i in range(num_users):
+            # First assign each client 1 shard to ensure every client has
+            # atleast one shard of data
+            rand_set = set(np.random.choice(idx_shard, 1, replace=False))
+            idx_shard = list(set(idx_shard) - rand_set)
+            for rand in rand_set:
+                dict_users[i] = np.concatenate(
+                    (dict_users[i], idxs[rand*num_imgs:(rand+1)*num_imgs]),
+                    axis=0)
+
+        random_shard_size = random_shard_size-1
+
+        # Next, randomly assign the remaining shards
+        for i in range(num_users):
+            if len(idx_shard) == 0:
+                continue
+            shard_size = random_shard_size[i]
+            if shard_size > len(idx_shard):
+                shard_size = len(idx_shard)
+            rand_set = set(np.random.choice(idx_shard, shard_size,
+                                            replace=False))
+            idx_shard = list(set(idx_shard) - rand_set)
+            for rand in rand_set:
+                dict_users[i] = np.concatenate(
+                    (dict_users[i], idxs[rand*num_imgs:(rand+1)*num_imgs]),
+                    axis=0)
+    else:
+
+        for i in range(num_users):
+            shard_size = random_shard_size[i]
+            rand_set = set(np.random.choice(idx_shard, shard_size,
+                                            replace=False))
+            idx_shard = list(set(idx_shard) - rand_set)
+            for rand in rand_set:
+                dict_users[i] = np.concatenate(
+                    (dict_users[i], idxs[rand*num_imgs:(rand+1)*num_imgs]),
+                    axis=0)
+
+        if len(idx_shard) > 0:
+            # Add the leftover shards to the client with minimum images:
+            shard_size = len(idx_shard)
+            # Add the remaining shard to the client with lowest data
+            k = min(dict_users, key=lambda x: len(dict_users.get(x)))
+            rand_set = set(np.random.choice(idx_shard, shard_size,
+                                            replace=False))
+            idx_shard = list(set(idx_shard) - rand_set)
+            for rand in rand_set:
+                dict_users[k] = np.concatenate(
+                    (dict_users[k], idxs[rand*num_imgs:(rand+1)*num_imgs]),
+                    axis=0)
+
+    return dict_users
+
+# CIFAAR unique functions:
 def cifar_iid(dataset, num_users):
     """
     Sample I.I.D. client data from CIFAR10 dataset
@@ -235,7 +361,6 @@ def cifar_iid(dataset, num_users):
                                              replace=False))
         all_idxs = list(set(all_idxs) - dict_users[i])
     return dict_users
-
 
 def cifar_noniid(dataset, num_users):
     """
@@ -362,6 +487,7 @@ def cifar_noniid_unequal(dataset, num_users):
 
     return dict_users
 
+
 def data_partition(training_data, number_of_clients, non_iid_level):
 
     if non_iid_level == 0:
@@ -379,9 +505,8 @@ def data_partition(training_data, number_of_clients, non_iid_level):
 
     return data_partition_profile
 
-
 if __name__ == '__main__':
-    dataset_train = datasets.MNIST('./data/mnist/', train=True, download=True,
+    dataset_train = datasets.MNIST('../data/noise-mnist/', train=True, download=True,
                                    transform=transforms.Compose([
                                        transforms.ToTensor(),
                                        transforms.Normalize((0.1307,),
