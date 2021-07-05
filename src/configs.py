@@ -12,7 +12,7 @@ class Configs(object):
     def __init__(self):
 
         ## TODO For FL training
-        self.data = 'cifar'
+        self.data = 'noise-mnist'
         self.task_repeat_time = 500
         self.rounds = 10    #todo change update batch
         self.frac = 1
@@ -45,6 +45,14 @@ class Configs(object):
             self.batch_size = 10
             theta_num = 69656
             self.D = (self.data_size / 10) * (32 * (theta_num + 10 * (3 * 32 * 32))) / 1e9
+        elif self.data == 'noise-mnist':
+            # self.data_size = np.array([16000, 14000, 12000, 18000, 20000])
+            # self.data_size = np.array([10000, 16000, 16000, 18000, 20000])
+            # self.data_size = np.array([28000, 13000, 13000, 13000, 13000])
+            self.data_size = np.array([ 16000, 16000, 16000, 16000, 16000])
+            self.batch_size = 100
+            theta_num = 21840
+            self.D = (self.data_size / 10) * (32 * (theta_num + 10 * 28 * 28)) / 1e9
         else:
             # self.data_size = np.array([12000, 10000, 8000, 14000, 16000])
             # self.data_size = np.array([6000, 12000, 12000, 14000, 16000])

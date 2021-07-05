@@ -121,6 +121,8 @@ class Env(object):
                 self.global_model = CNNCifar(args=self.args)
             elif self.args.dataset == 'cifar100':
                 self.global_model = LeNet()
+            elif self.args.dataset == 'noise-mnist':
+                self.global_model = CNNMnist(args=self.args)
 
         elif self.args.model == 'mlp':
             # Multi-layer preceptron
@@ -203,6 +205,8 @@ class Env(object):
         if self.args.model == 'cnn':
             # Convolutional neural netork
             if self.args.dataset == 'mnist':
+                self.global_model = CNNMnist(args=self.args)
+            elif self.args.dataset == 'noise-mnist':
                 self.global_model = CNNMnist(args=self.args)
             elif self.args.dataset == 'fmnist':
                 self.global_model = CNNFashion_Mnist(args=self.args)
